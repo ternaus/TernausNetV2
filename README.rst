@@ -74,7 +74,7 @@ Dependencies
 
 Demo Example
 ~~~~~~~~~~~~~~~~~~~~~~
-You can easily start working with our models using the demonstration example
+You can easily start using our network and weights, following the demonstration example
   `demo.ipynb`_
 
 ..  _`demo.ipynb`: https://github.com/ternaus/TernausNetV2/blob/master/Demo.ipynb
