@@ -72,7 +72,7 @@ Dependencies
 * opencv-python 3.3.0.10
 
 
-6. Demo Example
+Demo Example
 ~~~~~~~~~~~~~~~~~~~~~~
 You can easily start working with our models using the demonstration example
   `demo.ipynb`_
