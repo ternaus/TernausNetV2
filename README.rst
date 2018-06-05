@@ -13,6 +13,25 @@ Team members
 ------------
 `Vladimir Iglovikov`_, `Selim Seferbekov`_, `Alexandr Buslaev`_, `Alexey Shvets`_
 
+Citation
+----------
+
+If you find this work useful for your publications, please consider citing::
+
+@article{2018arXiv180600844I,
+   author = {{Iglovikov}, V.~I. and {Seferbekov}, S. and {Buslaev}, A.~V. and {Shvets}, A.},
+    title = "{TernausNetV2: Fully Convolutional Network for Instance Segmentation}",
+  journal = {ArXiv e-prints},
+archivePrefix = "arXiv",
+   eprint = {1806.00844},
+ primaryClass = "cs.CV",
+ keywords = {Computer Science - Computer Vision and Pattern Recognition},
+     year = 2018,
+    month = jun,
+   adsurl = {http://adsabs.harvard.edu/abs/2018arXiv180600844I},
+  adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+
 Overview
 --------
 Automatic building detection in urban areas is an important task that creates new opportunities for large scale urban planning,
@@ -32,14 +51,14 @@ images in the train and (1282, 381, 1528, 336) images in the test sets correspon
 Method
 ------
 The originial `TernausNet`_ was extened in a few ways:
-1. The encoder was replaced with `WideResnet 38 that has In-Place Activated BatchNorm`_.
-2. The input to the network was extended to work with 11 input channels. Three for RGB and eight for multispectral data.
+ 1. The encoder was replaced with `WideResnet 38 that has In-Place Activated BatchNorm`_.
+ 2. The input to the network was extended to work with 11 input channels. Three for RGB and eight for multispectral data.
 
 In order to make our network to perform instance segmentation, we utilized the idea that was proposed
 and successfully executed by `Alexandr Buslaev`_, `Selim Seferbekov`_ and Victor Durnov in their
 winning solutions of the `Urban 3d`_ and `Data Science Bowl 2018`_ challenges.
 
-3. Output of the network was modified to predict both the binary mask in which we predict building / non building classes on the pixel level
+ 3. Output of the network was modified to predict both the binary mask in which we predict building / non building classes on the pixel level
 and binary mask in which we predict areas of an image where different objects touch or very close to each other. These predicted masks are combined
 and used as an input to the watershed transform.
 
