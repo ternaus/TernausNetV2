@@ -68,7 +68,7 @@ Result on the public and private leaderboard with respect to the metric that was
     Vegas         0.891               0.892
     Paris         0.781               0.756
     Shanghai      0.680               0.687
-    Khatorum      0.603               0.608
+    Khartoum      0.603               0.608
     ------------- ------------------- -------------------
     Average       0.739               0.736
     ============= =================== ===================
