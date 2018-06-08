@@ -28,11 +28,7 @@ If you find this work useful for your publications, please consider citing::
 
 Overview
 --------
-Automatic building detection in urban areas is an important task that creates new opportunities for large scale urban planning,
-and population monitoring. In a `CVPR 2018 Deepglobe Building Extraction Challenge`_ participants were asked to create algorithms that
-would be able to perform binary instance segmentation of the building footprints from satellite imagery. Our team finished second and in this
-work we share the description of our approach, network weights and code that is sufficient for inference.
-of the main challenges is to correctly detect an instrument's position for the tracking and pose estimation in the vicinity of surgical scenes. Accurate pixel-wise instrument segmentation is needed to address this challenge. Our approach demonstrates an improvement over the state-of-the-art results using several novel deep neural network architectures. It addressed the binary segmentation problem, where every pixel in an image is labeled as an instrument or background from the surgery video feed. In addition, we solve a multi-class segmentation problem, in which we distinguish between different instruments or different parts of an instrument from the background. In this setting, our approach outperforms other methods in every task subcategory for automatic instrument segmentation thereby providing state-of-the-art results for these problems.
+Automatic building detection in urban areas is an important task that creates new opportunities for large scale urban planning and population monitoring. In a `CVPR 2018 Deepglobe Building Extraction Challenge`_ participants were asked to create algorithms that would be able to perform binary instance segmentation of the building footprints from satellite imagery. Our team finished second and in this work we share the description of our approach, network `weights`_ and code that is sufficient for inference. 
 
 Data
 ----
@@ -83,8 +79,12 @@ Dependencies
 * opencv-python 3.3.0.10
 
 
+
 Demo Example
 ~~~~~~~~~~~~~~~~~~~~~~
+Network `weights`_
+
+
 You can easily start using our network and weights, following the demonstration example
   `demo.ipynb`_
 
