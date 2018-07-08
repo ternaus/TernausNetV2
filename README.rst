@@ -18,13 +18,14 @@ Citation
 
 If you find this work useful for your publications, please consider citing::
 
-      @article{2018arXiv180600844I,
-         author = {Iglovikov, V.~I. and Seferbekov, S. and Buslaev, A.~V. and Shvets, A.},
-         title = "{TernausNetV2: Fully Convolutional Network for Instance Segmentation}",
-         journal = {ArXiv e-prints},      
-         eprint = {1806.00844},
-         year = 2018
-      }
+      @InProceedings{Iglovikov_2018_CVPR_Workshops,
+           author = {Iglovikov, Vladimir and Seferbekov, Selim and Buslaev, Alexander and Shvets, Alexey},
+            title = {TernausNetV2: Fully Convolutional Network for Instance Segmentation},
+        booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
+            month = {June},
+             year = {2018}
+            }
+
 
 Overview
 --------
@@ -78,6 +79,14 @@ Dependencies
 * numpy 1.14.0
 * opencv-python 3.3.0.10
 
+To compile Inplace ABN module:
+
+.. code-block:: 
+
+      cd modules
+      chmod +x build.sh
+      ./build.sh
+      python3 build.py
 
 
 Demo Example
