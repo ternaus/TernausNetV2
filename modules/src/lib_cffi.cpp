@@ -1,5 +1,13 @@
 // All functions assume that input and output tensors are already initialized
 // and have the correct dimensions
+
+// TODO: change to some PYTORCH VERSION MACRO
+// TODO: see https://github.com/pytorch/pytorch/pull/9895
+#ifdef _WIN32
+#include <ATen/Context.h>
+#define THCudaTensor_nDimension THCudaTensor_nDimensionLegacyAll
+#endif
+
 #include <THC/THC.h>
 
 // Forward definition of implementation functions
@@ -19,7 +27,11 @@ int _elu_backward_cuda(int N, const float *x, float *dx, cudaStream_t stream);
 int _elu_inv_cuda(int N, float *x, cudaStream_t stream);
 }
 
+#ifdef _WIN32
+THCState *state = at::globalContext().getTHCState();
+#else
 extern THCState *state;
+#endif
 
 void get_sizes(const THCudaTensor *t, int *N, int *C, int *S){
   // Get sizes

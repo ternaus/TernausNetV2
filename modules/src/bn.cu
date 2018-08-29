@@ -5,6 +5,11 @@
 #include "common.h"
 #include "bn.h"
 
+#ifdef _WIN32
+#include "device_launch_parameters.h"
+#include "crt/device_functions.h"
+#endif
+
 /*
  * Device functions and data structures
  */

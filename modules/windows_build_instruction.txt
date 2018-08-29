@@ -1,0 +1,6 @@
+1. Compile bn.cu to obj file.
+
+Example:
+> E:\pr\cuda\v9.2\bin\nvcc.exe -ccbin "E:\vs2017\VC\Tools\MSVC\14.14.26428\bin\HostX86\x64" -x cu -IE:\pr\cuda\v9.2\include --machine 64 --compile --expt-extended-lambda -DWIN32 -DWIN64 -DNDEBUG -D_CONSOLE -D_WINDLL -D_MBCS -Xcompiler "/EHsc /W3 /nologo /O2 /FS /Zi /MD " -o bn.cu.obj bn.cu
+
+2. Run python build_windows.py
