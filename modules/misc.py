@@ -1,4 +1,4 @@
-import torch.nn as nn
+from torch import nn
 
 
 class GlobalAvgPool2d(nn.Module):
