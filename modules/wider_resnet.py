@@ -1,11 +1,11 @@
-"""
-Adaptation from https://github.com/mapillary/inplace_abn
-"""
+"""Adaptation from https://github.com/mapillary/inplace_abn ."""
 
 from collections import OrderedDict
 import torch.nn as nn
 
-from modules import IdentityResidualBlock, ABN, GlobalAvgPool2d
+from modules.bn import ABN
+from modules.misc import GlobalAvgPool2d
+from modules.residual import IdentityResidualBlock
 
 
 class WiderResNet(nn.Module):

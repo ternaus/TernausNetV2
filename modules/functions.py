@@ -1,10 +1,24 @@
-import torch.autograd as autograd
-import torch.cuda.comm as comm
-from torch.autograd.function import once_differentiable
+"""Adaptation from https://github.com/mapillary/inplace_abn ."""
 
-from . import _ext
+from os import path
+
+from torch import autograd
+from torch.cuda import comm
+from torch.autograd.function import once_differentiable
+from torch.utils.cpp_extension import load
+
+_src_path = path.join(path.dirname(path.abspath(__file__)), "src")
+_backend = load(name="inplace_abn",
+                extra_cflags=["-O3"],
+                sources=[path.join(_src_path, f) for f in [
+                    "inplace_abn.cpp",
+                    "inplace_abn_cpu.cpp",
+                    "inplace_abn_cuda.cu"
+                ]],
+                extra_cuda_cflags=["--expt-extended-lambda"])
 
 # Activation names
+ACT_RELU = "relu"
 ACT_LEAKY_RELU = "leaky_relu"
 ACT_ELU = "elu"
 ACT_NONE = "none"
@@ -44,27 +58,20 @@ def _count_samples(x):
 
 def _act_forward(ctx, x):
     if ctx.activation == ACT_LEAKY_RELU:
-        _check(_ext.leaky_relu_cuda, x, ctx.slope)
+        _backend.leaky_relu_forward(x, ctx.slope)
     elif ctx.activation == ACT_ELU:
-        _check(_ext.elu_cuda, x)
+        _backend.elu_forward(x)
     elif ctx.activation == ACT_NONE:
         pass
 
 
 def _act_backward(ctx, x, dx):
     if ctx.activation == ACT_LEAKY_RELU:
-        _check(_ext.leaky_relu_backward_cuda, x, dx, ctx.slope)
-        _check(_ext.leaky_relu_cuda, x, 1. / ctx.slope)
+        _backend.leaky_relu_backward(x, dx, ctx.slope)
     elif ctx.activation == ACT_ELU:
-        _check(_ext.elu_backward_cuda, x, dx)
-        _check(_ext.elu_inv_cuda, x)
+        _backend.elu_backward(x, dx)
     elif ctx.activation == ACT_NONE:
         pass
-
-
-def _check_contiguous(*args):
-    if not all([mod is None or mod.is_contiguous() for mod in args]):
-        raise ValueError("Non-contiguous input")
 
 
 class InPlaceABN(autograd.Function):
@@ -77,87 +84,55 @@ class InPlaceABN(autograd.Function):
         ctx.eps = eps
         ctx.activation = activation
         ctx.slope = slope
+        ctx.affine = weight is not None and bias is not None
 
-        n = _count_samples(x)
+        # Prepare inputs
+        count = _count_samples(x)
+        x = x.contiguous()
+        weight = weight.contiguous() if ctx.affine else x.new_empty(0)
+        bias = bias.contiguous() if ctx.affine else x.new_empty(0)
 
         if ctx.training:
-            mean = x.new().resize_as_(running_mean)
-            var = x.new().resize_as_(running_var)
-            _check_contiguous(x, mean, var)
-            _check(_ext.bn_mean_var_cuda, x, mean, var)
+            mean, var = _backend.mean_var(x)
 
             # Update running stats
             running_mean.mul_((1 - ctx.momentum)).add_(ctx.momentum * mean)
-            running_var.mul_((1 - ctx.momentum)).add_(ctx.momentum * var * n / (n - 1))
+            running_var.mul_((1 - ctx.momentum)).add_(ctx.momentum * var * count / (count - 1))
+
+            # Mark in-place modified tensors
+            ctx.mark_dirty(x, running_mean, running_var)
         else:
-            mean, var = running_mean, running_var
+            mean, var = running_mean.contiguous(), running_var.contiguous()
+            ctx.mark_dirty(x)
 
-        _check_contiguous(x, mean, var, weight, bias)
-        _check(_ext.bn_forward_cuda,
-               x, mean, var,
-               weight if weight is not None else x.new(),
-               bias if bias is not None else x.new(),
-               x, x, ctx.eps)
-
-        # Activation
+        # BN forward + activation
+        _backend.forward(x, mean, var, weight, bias, ctx.affine, ctx.eps)
         _act_forward(ctx, x)
 
         # Output
         ctx.var = var
-        ctx.save_for_backward(x, weight, bias, running_mean, running_var)
-        ctx.mark_dirty(x)
+        ctx.save_for_backward(x, var, weight, bias)
         return x
 
     @staticmethod
     @once_differentiable
     def backward(ctx, dz):
-        z, weight, bias, running_mean, running_var = ctx.saved_tensors
+        z, var, weight, bias = ctx.saved_tensors
         dz = dz.contiguous()
 
         # Undo activation
         _act_backward(ctx, z, dz)
 
-        if ctx.needs_input_grad[0]:
-            dx = dz.new().resize_as_(dz)
-        else:
-            dx = None
-
-        if ctx.needs_input_grad[1]:
-            dweight = dz.new().resize_as_(running_mean).zero_()
-        else:
-            dweight = None
-
-        if ctx.needs_input_grad[2]:
-            dbias = dz.new().resize_as_(running_mean).zero_()
-        else:
-            dbias = None
-
         if ctx.training:
-            edz = dz.new().resize_as_(running_mean)
-            eydz = dz.new().resize_as_(running_mean)
-            _check_contiguous(z, dz, weight, bias, edz, eydz)
-            _check(_ext.bn_edz_eydz_cuda,
-                   z, dz,
-                   weight if weight is not None else dz.new(),
-                   bias if bias is not None else dz.new(),
-                   edz, eydz, ctx.eps)
+            edz, eydz = _backend.edz_eydz(z, dz, weight, bias, ctx.affine, ctx.eps)
         else:
-            # TODO: implement CUDA backward for inference mode
-            edz = dz.new().resize_as_(running_mean).zero_()
-            eydz = dz.new().resize_as_(running_mean).zero_()
+            # TODO: implement simplified CUDA backward for inference mode
+            edz = dz.new_zeros(dz.size(1))
+            eydz = dz.new_zeros(dz.size(1))
 
-        _check_contiguous(dz, z, ctx.var, weight, bias, edz, eydz, dx, dweight, dbias)
-        _check(_ext.bn_backard_cuda,
-               dz, z, ctx.var,
-               weight if weight is not None else dz.new(),
-               bias if bias is not None else dz.new(),
-               edz, eydz,
-               dx if dx is not None else dz.new(),
-               dweight if dweight is not None else dz.new(),
-               dbias if dbias is not None else dz.new(),
-               ctx.eps)
-
-        del ctx.var
+        dx, dweight, dbias = _backend.backward(z, dz, var, weight, bias, edz, eydz, ctx.affine, ctx.eps)
+        dweight = dweight if ctx.affine else None
+        dbias = dbias if ctx.affine else None
 
         return dx, dweight, dbias, None, None, None, None, None, None, None
 
@@ -173,22 +148,24 @@ class InPlaceABNSync(autograd.Function):
         ctx.eps = eps
         ctx.activation = activation
         ctx.slope = slope
+        ctx.affine = weight is not None and bias is not None
 
-        n = _count_samples(x) * (ctx.master_queue.maxsize + 1)
+        # Prepare inputs
+        count = _count_samples(x) * (ctx.master_queue.maxsize + 1)
+        x = x.contiguous()
+        weight = weight.contiguous() if ctx.affine else x.new_empty(0)
+        bias = bias.contiguous() if ctx.affine else x.new_empty(0)
 
         if ctx.training:
-            mean = x.new().resize_(1, running_mean.size(0))
-            var = x.new().resize_(1, running_var.size(0))
-            _check_contiguous(x, mean, var)
-            _check(_ext.bn_mean_var_cuda, x, mean, var)
+            mean, var = _backend.mean_var(x)
 
             if ctx.is_master:
-                means, vars = [mean], [var]
+                means, vars = [mean.unsqueeze(0)], [var.unsqueeze(0)]
                 for _ in range(ctx.master_queue.maxsize):
                     mean_w, var_w = ctx.master_queue.get()
                     ctx.master_queue.task_done()
-                    means.append(mean_w)
-                    vars.append(var_w)
+                    means.append(mean_w.unsqueeze(0))
+                    vars.append(var_w.unsqueeze(0))
 
                 means = comm.gather(means)
                 vars = comm.gather(vars)
@@ -206,59 +183,34 @@ class InPlaceABNSync(autograd.Function):
 
             # Update running stats
             running_mean.mul_((1 - ctx.momentum)).add_(ctx.momentum * mean)
-            running_var.mul_((1 - ctx.momentum)).add_(ctx.momentum * var * n / (n - 1))
+            running_var.mul_((1 - ctx.momentum)).add_(ctx.momentum * var * count / (count - 1))
+
+            # Mark in-place modified tensors
+            ctx.mark_dirty(x, running_mean, running_var)
         else:
-            mean, var = running_mean, running_var
+            mean, var = running_mean.contiguous(), running_var.contiguous()
+            ctx.mark_dirty(x)
 
-        _check_contiguous(x, mean, var, weight, bias)
-        _check(_ext.bn_forward_cuda,
-               x, mean, var,
-               weight if weight is not None else x.new(),
-               bias if bias is not None else x.new(),
-               x, x, ctx.eps)
-
-        # Activation
+        # BN forward + activation
+        _backend.forward(x, mean, var, weight, bias, ctx.affine, ctx.eps)
         _act_forward(ctx, x)
 
         # Output
         ctx.var = var
-        ctx.save_for_backward(x, weight, bias, running_mean, running_var)
-        ctx.mark_dirty(x)
+        ctx.save_for_backward(x, var, weight, bias)
         return x
 
     @staticmethod
     @once_differentiable
     def backward(ctx, dz):
-        z, weight, bias, running_mean, running_var = ctx.saved_tensors
+        z, var, weight, bias = ctx.saved_tensors
         dz = dz.contiguous()
 
         # Undo activation
         _act_backward(ctx, z, dz)
 
-        if ctx.needs_input_grad[0]:
-            dx = dz.new().resize_as_(dz)
-        else:
-            dx = None
-
-        if ctx.needs_input_grad[1]:
-            dweight = dz.new().resize_as_(running_mean).zero_()
-        else:
-            dweight = None
-
-        if ctx.needs_input_grad[2]:
-            dbias = dz.new().resize_as_(running_mean).zero_()
-        else:
-            dbias = None
-
         if ctx.training:
-            edz = dz.new().resize_as_(running_mean)
-            eydz = dz.new().resize_as_(running_mean)
-            _check_contiguous(z, dz, weight, bias, edz, eydz)
-            _check(_ext.bn_edz_eydz_cuda,
-                   z, dz,
-                   weight if weight is not None else dz.new(),
-                   bias if bias is not None else dz.new(),
-                   edz, eydz, ctx.eps)
+            edz, eydz = _backend.edz_eydz(z, dz, weight, bias, ctx.affine, ctx.eps)
 
             if ctx.is_master:
                 edzs, eydzs = [edz], [eydz]
@@ -279,21 +231,12 @@ class InPlaceABNSync(autograd.Function):
                 edz, eydz = ctx.worker_queue.get()
                 ctx.worker_queue.task_done()
         else:
-            edz = dz.new().resize_as_(running_mean).zero_()
-            eydz = dz.new().resize_as_(running_mean).zero_()
+            edz = dz.new_zeros(dz.size(1))
+            eydz = dz.new_zeros(dz.size(1))
 
-        _check_contiguous(dz, z, ctx.var, weight, bias, edz, eydz, dx, dweight, dbias)
-        _check(_ext.bn_backard_cuda,
-               dz, z, ctx.var,
-               weight if weight is not None else dz.new(),
-               bias if bias is not None else dz.new(),
-               edz, eydz,
-               dx if dx is not None else dz.new(),
-               dweight if dweight is not None else dz.new(),
-               dbias if dbias is not None else dz.new(),
-               ctx.eps)
-
-        del ctx.var
+        dx, dweight, dbias = _backend.backward(z, dz, var, weight, bias, edz, eydz, ctx.affine, ctx.eps)
+        dweight = dweight if ctx.affine else None
+        dbias = dbias if ctx.affine else None
 
         return dx, dweight, dbias, None, None, None, None, None, None, None, None
 
@@ -312,4 +255,4 @@ class InPlaceABNSync(autograd.Function):
 inplace_abn = InPlaceABN.apply
 inplace_abn_sync = InPlaceABNSync.apply
 
-__all__ = ["inplace_abn", "inplace_abn_sync"]
+__all__ = ["inplace_abn", "inplace_abn_sync", "ACT_RELU", "ACT_LEAKY_RELU", "ACT_ELU", "ACT_NONE"]

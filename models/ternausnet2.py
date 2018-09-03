@@ -1,14 +1,15 @@
+"""The network definition that was used for a second place solution at the DeepGlobe Building Detection challenge."""
+
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-from .utils import get_model_params
 from torch.nn import Sequential
 from collections import OrderedDict
 
-from .wider_resnet import WiderResNet
+from modules.wider_resnet import WiderResNet
 
 
 def conv3x3(in_, out):
@@ -28,8 +29,7 @@ class ConvRelu(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    """
-    Paramaters for Deconvolution were chosen to avoid artifacts, following
+    """Paramaters for Deconvolution were chosen to avoid artifacts, following
     link https://distill.pub/2016/deconv-checkerboard/
     """
 
@@ -56,39 +56,24 @@ class DecoderBlock(nn.Module):
 
 
 class TernausNetV2(nn.Module):
-    def __init__(self, num_classes=1,
-                 num_filters=32,
-                 is_deconv=False,
-                 num_input_channels=11):
-        """
-        :param num_classes:
-        :param num_filters:
-        :param pretrained:
-            False - no pre-trained network used
-            True - encoder pre-trained on SpaceNet data as a part of the DeepGlobe Building Extraction Challenge
-        :param is_deconv:
-            False - upsampling in decoder
-            True - deconvolution in decoder
-        :param num_input_channels: number of input channels
-        """
-        super().__init__()
+    """Variation of the UNet architecture with InplaceABN encoder."""
 
-        conf = {
-            "network": {
-                "arch": "wider_resnet38",
-                "activation": "leaky_relu",
-                "leaky_relu_slope": 0.01,
-                "input_3x3": True,
-                "bn_mode": "inplace",
-                "classes": 1000
-            }
-        }
+    def __init__(self, num_classes=1, num_filters=32, is_deconv=False, num_input_channels=11):
+        """
+
+        Args:
+            num_classes: Number of output classes.
+            num_filters:
+            is_deconv:
+                True: Deconvolution layer is used in the Decoder block.
+                False: Upsampling layer is used in the Decoder block.
+            num_input_channels: Number of channels in the input images.
+        """
+        super(TernausNetV2, self).__init__()
 
         self.pool = nn.MaxPool2d(2, 2)
 
-        model_params = get_model_params(conf["network"])
-
-        encoder = WiderResNet(structure=[3, 3, 6, 3, 1, 1], **model_params)
+        encoder = WiderResNet(structure=[3, 3, 6, 3, 1, 1], classes=1000)
 
         self.conv1 = Sequential(
             OrderedDict([('conv1', nn.Conv2d(num_input_channels, 64, 3, padding=1, bias=False))]))

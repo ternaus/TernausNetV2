@@ -79,15 +79,6 @@ Dependencies
 * numpy 1.14.0
 * opencv-python 3.3.0.10
 
-To compile Inplace ABN module:
-
-.. code-block:: 
-
-      cd modules
-      chmod +x build.sh
-      ./build.sh
-      python3 build.py
-
 
 Demo Example
 ~~~~~~~~~~~~~~~~~~~~~~
