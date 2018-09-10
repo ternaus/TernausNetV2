@@ -8,6 +8,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 from torch.nn import Sequential
 from collections import OrderedDict
+from modules.bn import ABN
 
 from modules.wider_resnet import WiderResNet
 
@@ -17,8 +18,8 @@ def conv3x3(in_, out):
 
 
 class ConvRelu(nn.Module):
-    def __init__(self, in_: int, out: int):
-        super().__init__()
+    def __init__(self, in_, out):
+        super(ConvRelu, self).__init__()
         self.conv = conv3x3(in_, out)
         self.activation = nn.ReLU(inplace=True)
 
@@ -58,7 +59,7 @@ class DecoderBlock(nn.Module):
 class TernausNetV2(nn.Module):
     """Variation of the UNet architecture with InplaceABN encoder."""
 
-    def __init__(self, num_classes=1, num_filters=32, is_deconv=False, num_input_channels=11):
+    def __init__(self, num_classes=1, num_filters=32, is_deconv=False, num_input_channels=11, **kwargs):
         """
 
         Args:
@@ -71,9 +72,14 @@ class TernausNetV2(nn.Module):
         """
         super(TernausNetV2, self).__init__()
 
+        if 'norm_act' not in kwargs:
+            norm_act = ABN
+        else:
+            norm_act = kwargs['norm_act']
+
         self.pool = nn.MaxPool2d(2, 2)
 
-        encoder = WiderResNet(structure=[3, 3, 6, 3, 1, 1], classes=1000)
+        encoder = WiderResNet(structure=[3, 3, 6, 3, 1, 1], classes=1000, norm_act=norm_act)
 
         self.conv1 = Sequential(
             OrderedDict([('conv1', nn.Conv2d(num_input_channels, 64, 3, padding=1, bias=False))]))
